@@ -4,12 +4,14 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'src/frontend/**'
-      - 'src/cartservice/**'
+      - 'microservices-demo/src/frontend/**'
+      - 'microservices-demo/src/cartservice/**'
+      - '.github/workflows/deploy.yml'
 
 env:
   AZURE_RESOURCE_GROUP: devops-hakaton-rg
   AZURE_AKS_CLUSTER: online-boutique-aks
+  ACR_LOGIN_SERVER: devopshakatonacr.azurecr.io
 
 jobs:
   build-and-deploy:
@@ -32,18 +34,32 @@ jobs:
         resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
         cluster-name: ${{ env.AZURE_AKS_CLUSTER }}
     
+    - name: Docker login to ACR
+      run: |
+        echo ${{ secrets.ACR_PASSWORD }} | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
+    
     - name: Build and push frontend
       run: |
         cd microservices-demo/src/frontend
-        docker build -t frontend:${{ github.sha }} .
-        # Тут треба буде додати push в Azure Container Registry
+        docker build -t ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ github.sha }} .
+        docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ github.sha }}
+    
+    - name: Build and push cartservice
+      run: |
+        cd microservices-demo/src/cartservice
+        docker build -t ${{ env.ACR_LOGIN_SERVER }}/cartservice:${{ github.sha }} .
+        docker push ${{ env.ACR_LOGIN_SERVER }}/cartservice:${{ github.sha }}
     
     - name: Deploy to staging
       run: |
-        kubectl set image deployment/frontend frontend=frontend:${{ github.sha }} -n staging
+        kubectl set image deployment/frontend frontend=${{ env.ACR_LOGIN_SERVER }}/frontend:${{ github.sha }} -n staging
+        kubectl set image deployment/cartservice cartservice=${{ env.ACR_LOGIN_SERVER }}/cartservice:${{ github.sha }} -n staging
         kubectl rollout status deployment/frontend -n staging
+        kubectl rollout status deployment/cartservice -n staging
     
     - name: Deploy to production
       run: |
-        kubectl set image deployment/frontend frontend=frontend:${{ github.sha }} -n prod
+        kubectl set image deployment/frontend frontend=${{ env.ACR_LOGIN_SERVER }}/frontend:${{ github.sha }} -n prod
+        kubectl set image deployment/cartservice cartservice=${{ env.ACR_LOGIN_SERVER }}/cartservice:${{ github.sha }} -n prod
         kubectl rollout status deployment/frontend -n prod
+        kubectl rollout status deployment/cartservice -n prod
