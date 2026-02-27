@@ -46,8 +46,8 @@ jobs:
     
     - name: Build and push cartservice
       run: |
-        cd microservices-demo/src/cartservice
-        docker build -t ${{ env.ACR_LOGIN_SERVER }}/cartservice:${{ github.sha }} .
+        cd microservices-demo/src/cartservice/src
+        docker build -t ${{ env.ACR_LOGIN_SERVER }}/cartservice:${{ github.sha }} -f Dockerfile .
         docker push ${{ env.ACR_LOGIN_SERVER }}/cartservice:${{ github.sha }}
     
     - name: Deploy to staging
