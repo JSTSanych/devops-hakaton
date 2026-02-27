@@ -1,0 +1,49 @@
+name: Deploy to AKS
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/frontend/**'
+      - 'src/cartservice/**'
+
+env:
+  AZURE_RESOURCE_GROUP: devops-hakaton-rg
+  AZURE_AKS_CLUSTER: online-boutique-aks
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+    
+    - name: Set AKS context
+      uses: azure/aks-set-context@v3
+      with:
+        resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+        cluster-name: ${{ env.AZURE_AKS_CLUSTER }}
+    
+    - name: Build and push frontend
+      run: |
+        cd microservices-demo/src/frontend
+        docker build -t frontend:${{ github.sha }} .
+        # Тут треба буде додати push в Azure Container Registry
+    
+    - name: Deploy to staging
+      run: |
+        kubectl set image deployment/frontend frontend=frontend:${{ github.sha }} -n staging
+        kubectl rollout status deployment/frontend -n staging
+    
+    - name: Deploy to production
+      run: |
+        kubectl set image deployment/frontend frontend=frontend:${{ github.sha }} -n prod
+        kubectl rollout status deployment/frontend -n prod
